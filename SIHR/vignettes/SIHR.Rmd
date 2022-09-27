@@ -1,0 +1,313 @@
+---
+title: "intro"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Examples
+
+These are basic examples which show how to solve the common high-dimensional inference problems:
+
+```{r example}
+library(SIHR)
+```
+
+### Linear functional in linear regression model - 1
+Generate Data and find the truth linear functionals:
+```{r Generate Data LF-linear}
+set.seed(0)
+X = matrix(rnorm(100*120), nrow=100, ncol=120)
+y = -0.5 + X[,1] * 0.5 + X[,2] * 1 + rnorm(100)
+loading1 = c(1, 1, rep(0, 118))
+loading2 = c(-0.5, -1, rep(0, 118))
+loading.mat = cbind(loading1, loading2)
+## consider the intercept.loading=FALSE
+truth1 = 0.5 * 1 + 1 * 1
+truth2 = 0.5 * -0.5 + 1 * -1
+truth = c(truth1, truth2)
+truth
+```
+In the example, the linear functional does not involve the intercept term, so we set `intercept.loading=FALSE` (default). If users want to include the intercept term, please set `intercept.loading=TRUE`, such that truth1 = -0.5 + 1.5 = 1; truth2 = -0.5 - 1.25 = -1.75
+
+Call `LF` with `model="linear"`: 
+```{r LF-linear}
+Est = LF(X, y, loading.mat, model="linear", intercept=TRUE, intercept.loading=FALSE, verbose=TRUE)
+```
+
+`ci` method for `LF`
+```{r ci LF-linear}
+ci(Est)
+```
+
+`summary` method for `LF`
+```{r Summary LF-linear}
+summary(Est)
+```
+
+### Linear functional in linear regression model - 2
+
+Sometimes, we may be interested in multiple linear functionals, each with a separate loading. To be computationally efficient, we can specify the argument `beta.init` first, so that the program can save time to compute the initial estimator repeatedly.
+```{r Generate Data LF-linear-2}
+set.seed(1)
+X = matrix(rnorm(100*120), nrow=100, ncol=120)
+y = -0.5 + X[,1:10] %*% rep(0.5, 10) + rnorm(100)
+loading.mat = matrix(0, nrow=120, ncol=10)
+for(i in 1:ncol(loading.mat)){
+  loading.mat[i,i] =  1
+}
+```
+
+```{r initial estimator LF-linear-2}
+library(glmnet)
+cvfit = cv.glmnet(X, y, family = "gaussian", alpha = 1, intercept = TRUE, standardize = T)
+beta.init = as.vector(coef(cvfit, s = cvfit$lambda.min))
+```
+Call `LF` with `model="linear"`:
+```{r LF-linear-2}
+Est = LF(X, y, loading.mat, model="linear", intercept=TRUE, beta.init=beta.init, verbose=TRUE)
+```
+
+`ci` method for `LF`
+```{r ci LF-linear-2}
+ci(Est)
+```
+
+`summary` method for `LF`
+```{r Summary LF-linear-2}
+summary(Est)
+```
+
+
+### Linear functional in logistic regression model
+Generate Data and find the truth linear functionals:
+```{r Generate Data LF-logistic}
+set.seed(0)
+X = matrix(rnorm(100*120), nrow=100, ncol=120)
+exp_val = -0.5 + X[,1] * 0.5 + X[,2] * 1
+prob = exp(exp_val) / (1+exp(exp_val))
+y = rbinom(100, 1, prob)
+## loadings
+loading1 = c(1, 1, rep(0, 118))
+loading2 = c(-0.5, -1, rep(0, 118))
+loading.mat = cbind(loading1, loading2)
+## consider the intercept.loading=TRUE
+truth1 = 0.5 * 1 + 1 * 1
+truth2 = 0.5 * -0.5 + 1 * -1
+truth = c(truth1, truth2)
+truth.prob = exp(truth) / (1 + exp(truth))
+truth; truth.prob
+```
+
+Call `LF` with `model="logistic"` or `model="logistic_alter"`: 
+```{r LF-logistic}
+## model = "logisitc"
+Est = LF(X, y, loading.mat, model="logistic", verbose=TRUE)
+```
+
+`ci` method for `LF`
+```{r ci LF-logistic}
+## confidence interval for linear combination
+ci(Est)
+## confidence interval after probability transformation
+ci(Est, probability = TRUE)
+```
+
+`summary` method for `LF`
+```{r Summary LF-logistic}
+summary(Est)
+```
+
+Call `LF` with `model="logistic_alter"`: 
+```{r LF-logistic-alter}
+## model = "logistic_alter"
+Est = LF(X, y, loading.mat, model="logistic_alter", verbose=TRUE)
+```
+
+`ci` method for `LF`
+```{r ci LF-logistic-alter}
+## confidence interval for linear combination
+ci(Est)
+## confidence interval after probability transformation
+ci(Est, probability = TRUE)
+```
+
+`summary` method for `LF`
+```{r Summary LF-logistic-alter}
+summary(Est)
+```
+
+### Individualized Treatment Effect in linear regression model
+Generate Data and find the truth linear functionals:
+```{r Generate Data ITE-linear}
+set.seed(0)
+## 1st data
+X1 = matrix(rnorm(100*120), nrow=100, ncol=120)
+y1 = -0.5 + X1[,1] * 0.5 + X1[,2] * 1 + rnorm(100)
+## 2nd data
+X2 = matrix(0.8*rnorm(100*120), nrow=100, ncol=120)
+y2 = 0.1 + X2[,1] * 0.8 + X2[,2] * 0.8 + rnorm(100)
+## loadings
+loading1 = c(1, 1, rep(0, 118))
+loading2 = c(-0.5, -1, rep(0, 118))
+loading.mat = cbind(loading1, loading2)
+truth1 = (0.5*1 + 1*1) - (0.8*1 + 0.8*1)
+truth2 = (0.5*(-0.5) + 1*(-1)) - (0.8*(-0.5) + 0.8*(-1))
+truth = c(truth1, truth2)
+truth
+```
+
+Call `ITE` with `model="linear"`:
+```{r ITE-linear}
+Est = ITE(X1, y1, X2, y2, loading.mat, model="linear", verbose=TRUE)
+```
+
+`ci` method for `ITE`
+```{r ci ITE-linear}
+ci(Est)
+```
+
+`summary` method for `ITE`
+```{r Summary ITE-linear}
+summary(Est)
+```
+
+### Individualized Treatment Effect in logistic regression model
+Generate Data and find the truth linear functionals:
+```{r Generate Data ITE-logistic}
+set.seed(0)
+## 1st data
+X1 = matrix(rnorm(100*120), nrow=100, ncol=120)
+exp_val1 = -0.5 + X1[,1] * 0.5 + X1[,2] * 1
+prob1 = exp(exp_val1) / (1 + exp(exp_val1))
+y1 = rbinom(100, 1, prob1)
+## 2nd data
+X2 = matrix(0.8*rnorm(100*120), nrow=100, ncol=120)
+exp_val2 = -0.5 + X2[,1] * 0.8 + X2[,2] * 0.8
+prob2 = exp(exp_val2) / (1 + exp(exp_val2))
+y2 = rbinom(100, 1, prob2)
+## loadings
+loading1 = c(1, 1, rep(0, 118))
+loading2 = c(-0.5, -1, rep(0, 118))
+loading.mat = cbind(loading1, loading2)
+truth1 = (0.5*1 + 1*1) - (0.8*1 + 0.8*1)
+truth2 = (0.5*(-0.5) + 1*(-1)) - (0.8*(-0.5) + 0.8*(-1))
+truth = c(truth1, truth2)
+prob.fun = function(x) exp(x)/(1+exp(x))
+truth.prob1 = prob.fun(0.5*1 + 1*1) - prob.fun(0.8*1 + 0.8*1)
+truth.prob2 = prob.fun(0.5*(-0.5) + 1*(-1)) - prob.fun(0.8*(-0.5) + 0.8*(-1))
+truth.prob = c(truth.prob1, truth.prob2)
+
+truth; truth.prob
+```
+
+Call `ITE` with `model="logistic"` or `model="logisitc_alter"`:
+```{r ITE-logisitc}
+Est = ITE(X1, y1, X2, y2, loading.mat, model="logistic", verbose = TRUE)
+```
+
+`ci` method for `ITE`:
+```{r ci ITE-logistic}
+## confidence interval for linear combination
+ci(Est)
+## confidence interval after probability transformation
+ci(Est, probability = TRUE)
+```
+
+`summary` method for `ITE`:
+```{r summary ITE-logistic}
+summary(Est)
+```
+
+
+### Quadratic functional in linear regression
+Generate Data and find the truth quadratic functionals:
+```{r Generate Data QF-linear}
+set.seed(0)
+A1gen <- function(rho, p){
+  M = matrix(NA, nrow=p, ncol=p)
+  for(i in 1:p) for(j in 1:p) M[i,j] = rho^{abs(i-j)}
+  M
+}
+Cov = A1gen(0.5, 150)/2
+X = MASS::mvrnorm(n=400, mu=rep(0, 150), Sigma=Cov)
+beta = rep(0, 150); beta[25:50] = 0.2
+y = X%*%beta + rnorm(400)
+test.set = c(40:60)
+truth = as.numeric(t(beta[test.set])%*%Cov[test.set, test.set]%*%beta[test.set])
+truth
+```
+
+Call `QF` with `model="linear"` with intial estimator given:
+```{r QF-linear}
+library(glmnet)
+outLas <- cv.glmnet(X, y, family = "gaussian", alpha = 1,
+                            intercept = T, standardize = T)
+beta.init = as.vector(coef(outLas, s = outLas$lambda.min))
+tau = c(0.25, 0.5)
+Est = QF(X, y, G=test.set, A=NULL, model="linear", beta.init=beta.init, tau=tau, verbose=TRUE)
+```
+
+`ci` method for `QF`
+```{r ci QF-linear}
+ci(Est)
+```
+
+`summary` method for `QF`
+```{r Summary QF-linear}
+summary(Est)
+```
+
+### Quadratic functional in logistic regression
+Generate Data and find the truth quadratic functional
+```{r Generate Data QF-logistic}
+set.seed(0)
+A1gen <- function(rho, p){
+  M = matrix(NA, nrow=p, ncol=p)
+  for(i in 1:p) for(j in 1:p) M[i,j] = rho^{abs(i-j)}
+  M
+}
+Cov = A1gen(0.5, 150)/2
+X = MASS::mvrnorm(n=400, mu=rep(0, 150), Sigma=Cov)
+beta = rep(0, 150); beta[25:50] = 0.2
+exp_val = X%*%beta
+prob = exp(exp_val) / (1+exp(exp_val))
+y = rbinom(400, 1, prob)
+test.set = c(40:60)
+truth = as.numeric(t(beta[test.set]%*%Cov[test.set, test.set]%*%beta[test.set]))
+truth
+```
+
+Call `QF` with `model="logistic"` or `model="logisitc"`:
+```{r QF-logisitc}
+tau = c(0.25, 0.5)
+Est = QF(X, y, G=test.set, A=NULL, model="logistic", split=T, tau=tau, verbose=TRUE)
+```
+
+`ci` method for `QF`:
+```{r ci QF-logistic}
+ci(Est)
+```
+
+`summary` method for `QF`:
+```{r summary QF-logistic}
+summary(Est)
+```
+
+Call `QF` with `model="logisitc_alter"`:
+```{r QF-logisitc-alter}
+tau = c(0.25, 0.5)
+Est = QF(X, y, G=test.set, A=NULL, model="logistic_alter", split=T, tau=tau, verbose=TRUE)
+```
+
+`ci` method for `QF`:
+```{r ci QF-logistic-alter}
+ci(Est)
+```
+
+`summary` method for `QF`:
+```{r summary QF-logistic-alter}
+summary(Est)
+```
